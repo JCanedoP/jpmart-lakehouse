@@ -52,13 +52,21 @@ notebooks/
 
 **Ingestion strategy (Bronze):** `customers` and `orders` are ingested incrementally via Auto Loader with `MERGE INTO` (upsert), since real-world sources emit both new records and updates to existing ones. `order_items` and `web_events` are append-only, ingested incrementally via Auto Loader. `products` is small, static reference data loaded via full batch overwrite. All Bronze columns land as `string`, with `_source_file` and `_ingested_at` added for lineage.
 
+## Data quality strategy (Silver)
+ 
+Each Silver entity is split into two outputs:
+ 
+- **`<entity>`** — valid, cleaned rows.
+- **`<entity>_quarantine`** — rows with a critical, unrecoverable problem, kept for auditing instead of silently dropped.
+**Rule of thumb:** a row is quarantined only when the problem invalidates its identity or its ability to be linked to other data (a missing primary key, or a missing/invalid required foreign key — e.g. an order with no `customer_id`). A recoverable formatting issue (inconsistent casing, mixed date formats, a stray currency symbol, a negative value from a capture error) is cleaned in place and the row stays in Silver. Exact-duplicate rows are removed per entity based on how each one actually arrives (e.g. `order_items` is append-only with no upstream deduplication, so its dedup step does real work; `orders`/`customers` are already deduplicated by the Bronze `MERGE`).
+
 ## Status
 
 - [x] Unity Catalog setup (catalog, schemas, volume)
 - [x] Synthetic data generator
 - [x] Bronze ingestion (batch + incremental streaming)
-- [ ] Silver transformation (in progress)
-- [ ] Gold aggregation
+- [x] Silver transformation (cleaning, deduplication, quarantine) 
+- [ ] Gold aggregation (in progress)
 
 ## Workflow
 
