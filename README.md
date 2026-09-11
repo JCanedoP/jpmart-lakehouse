@@ -60,13 +60,24 @@ Each Silver entity is split into two outputs:
 - **`<entity>_quarantine`** — rows with a critical, unrecoverable problem, kept for auditing instead of silently dropped.
 **Rule of thumb:** a row is quarantined only when the problem invalidates its identity or its ability to be linked to other data (a missing primary key, or a missing/invalid required foreign key — e.g. an order with no `customer_id`). A recoverable formatting issue (inconsistent casing, mixed date formats, a stray currency symbol, a negative value from a capture error) is cleaned in place and the row stays in Silver. Exact-duplicate rows are removed per entity based on how each one actually arrives (e.g. `order_items` is append-only with no upstream deduplication, so its dedup step does real work; `orders`/`customers` are already deduplicated by the Bronze `MERGE`).
 
+**Cascading quarantine:** `order_items` quarantine isn't just a per-row field check — an item is also quarantined if its `order_id` points to an order that was itself quarantined (e.g. for a missing `customer_id`). This gap was caught during Gold's referential integrity validation (orphaned rows in `fact_order_items -> fact_orders`) and fixed by validating `order_items` against the set of orders that actually survived Silver cleaning, not just against null checks.
+ 
+## Star schema (Gold)
+ 
+Gold builds a dimensional model on top of Silver, plus a set of business-ready aggregate tables computed on top of that model:
+ 
+- **Dimensions:** `dim_date` (standalone calendar), `dim_customers`, `dim_products` — Type 1 (overwrite). `dim_customers`/`dim_products` each include a synthetic `UNKNOWN` member row, so fact tables never carry a null foreign key for a legitimately-missing reference (e.g. an anonymous web session).
+- **Facts:** `fact_orders` (grain: one order), `fact_order_items` (grain: one order line), `fact_web_events` (grain: one event).
+- **Business aggregates:** `agg_revenue_by_month_category`, `agg_customer_ltv` (spend-based tiering), `agg_top_products`, `agg_conversion_funnel` (web funnel stage-over-stage conversion) — all computed by querying the Gold star schema itself, not Silver directly.
+Referential integrity between every fact and its dimensions is validated with orphan checks after each run.
+ 
 ## Status
 
 - [x] Unity Catalog setup (catalog, schemas, volume)
 - [x] Synthetic data generator
 - [x] Bronze ingestion (batch + incremental streaming)
 - [x] Silver transformation (cleaning, deduplication, quarantine) 
-- [ ] Gold aggregation (in progress)
+- [x] Gold aggregation (in progress)
 
 ## Workflow
 
