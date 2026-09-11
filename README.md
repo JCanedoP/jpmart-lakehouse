@@ -77,7 +77,7 @@ Referential integrity between every fact and its dimensions is validated with or
 - [x] Synthetic data generator
 - [x] Bronze ingestion (batch + incremental streaming)
 - [x] Silver transformation (cleaning, deduplication, quarantine) 
-- [x] Gold aggregation (in progress)
+- [x] Gold aggregation
 
 ## Workflow
 
